@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Filter Matters</title>
 
-  <!-- Grist Plugin API (required for hosted widgets) -->
+  <!-- ✅ Correct Grist Plugin API -->
   <script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
 
   <style>
@@ -144,7 +144,6 @@
       gap: var(--gap);
     }
 
-    /* One slim row: 4 dropdowns + OR + search */
     .rowMain{
       display:grid;
       gap: var(--gap);
@@ -158,7 +157,6 @@
         minmax(240px, 1.8fr);
     }
 
-    /* Visually-hidden labels (accessibility) */
     .sr-only{
       position:absolute;
       width:1px;height:1px;
@@ -180,9 +178,7 @@
       transition: border-color .12s ease, box-shadow .12s ease, background .12s ease;
     }
 
-    input::placeholder{
-      color: rgba(241,245,249,.78);
-    }
+    input::placeholder{ color: rgba(241,245,249,.78); }
 
     input:focus, select:focus{
       box-shadow: 0 0 0 3px var(--ring);
@@ -211,14 +207,8 @@
     }
 
     /* Search input with clear X inside */
-    .searchWrap{
-      position: relative;
-      min-width: 0;
-    }
-    .searchWrap input{
-      width: 100%;
-      padding-right: 32px;
-    }
+    .searchWrap{ position: relative; min-width: 0; }
+    .searchWrap input{ width: 100%; padding-right: 32px; }
 
     .clearX{
       position: absolute;
@@ -239,21 +229,13 @@
       cursor: pointer;
       padding: 0;
     }
-    .clearX:hover{
-      background: rgba(255,255,255,.16);
-      border-color: rgba(255,255,255,.30);
-    }
-    .clearX:focus{
-      outline: none;
-      box-shadow: 0 0 0 3px var(--ring);
-      border-color: rgba(34,211,238,.45);
-    }
 
     .err{
       font-size: 12px;
       color: #fecaca;
       margin-top: 2px;
       min-height: 14px;
+      white-space: pre-wrap;
     }
 
     /* ✅ FIX: Dropdown option list contrast */
@@ -311,7 +293,7 @@
 
           <span class="orPill" aria-hidden="true">OR</span>
 
-          <label class="sr-only" for="q">Search (MatterID, Clients, Subject, Subject2)</label>
+          <label class="sr-only" for="q">Search</label>
           <div class="searchWrap">
             <input
               id="q"
@@ -330,250 +312,258 @@
   </div>
 
   <script>
-    // Initialize widget
-    grist.ready({ requiredAccess: "read table", allowSelectBy: true });
-
-    const q = document.getElementById("q");
-    const clearX = document.getElementById("clearX");
-
-    const yearSel = document.getElementById("yearSel");
-    const statusSel = document.getElementById("statusSel");
-    const lawyerSel = document.getElementById("lawyerSel");
-    const typeSel = document.getElementById("typeSel");
-
-    const countEl = document.getElementById("count");
     const errEl = document.getElementById("err");
-    const clearBtn = document.getElementById("clearBtn");
 
-    const searchTag = document.getElementById("searchTag");
-    const searchHL = document.getElementById("searchHL");
-
-    let rows = []; // {id, MTR_YEAR, Status, Lawyer, Mtr_Type, _search}
-    let state = {
-      queryDraft: "",
-      query: "",
-      year: "", status: "", lawyer: "", type: ""
-    };
-
-    function norm(v){ return (v === null || v === undefined) ? "" : String(v); }
     function setErr(msg){ errEl.textContent = msg || ""; }
+    function norm(v){ return (v === null || v === undefined) ? "" : String(v); }
 
-    function uniq(arr){
-      const s = new Set(arr.map(norm));
-      return [...s].filter(v => v !== "");
-    }
-    function sortYears(years){
-      return years.map(Number).filter(n => !Number.isNaN(n)).sort((a,b)=>b-a).map(String);
-    }
-    function sortAlpha(items){
-      return items.sort((a,b)=>a.localeCompare(b, undefined, { sensitivity:"base" }));
-    }
+    // ✅ Safety: show a clear on-screen error if plugin didn't load
+    if (!window.grist) {
+      setErr(
+        "Grist plugin API did not load (window.grist is undefined).\n" +
+        "Most common cause: incorrect <script src=\"https://docs.getgrist.com/grist-plugin-api.js\"></script> tag,\n" +
+        "or the file is being served in a way that blocks external scripts."
+      );
+    } else {
+      // Initialize widget
+      grist.ready({ requiredAccess: "read table", allowSelectBy: true });
 
-    function fillSelect(sel, items, selected, allLabel){
-      sel.innerHTML = "";
-      const all = document.createElement("option");
-      all.value = "";
-      all.textContent = allLabel;
-      sel.appendChild(all);
+      const q = document.getElementById("q");
+      const clearX = document.getElementById("clearX");
 
-      items.forEach(v => {
-        const o = document.createElement("option");
-        o.value = v;
-        o.textContent = v;
-        sel.appendChild(o);
-      });
+      const yearSel = document.getElementById("yearSel");
+      const statusSel = document.getElementById("statusSel");
+      const lawyerSel = document.getElementById("lawyerSel");
+      const typeSel = document.getElementById("typeSel");
 
-      sel.value = selected || "";
-    }
+      const countEl = document.getElementById("count");
+      const clearBtn = document.getElementById("clearBtn");
 
-    function applyDefaultsIfEmpty(){
-      if (!state.year){
-        const currentYear = String(new Date().getFullYear());
-        const years = new Set(rows.map(r => norm(r.MTR_YEAR)));
-        if (years.has(currentYear)) state.year = currentYear;
+      const searchTag = document.getElementById("searchTag");
+      const searchHL = document.getElementById("searchHL");
+
+      let rows = [];
+      let state = {
+        queryDraft: "",
+        query: "",
+        year: "", status: "", lawyer: "", type: ""
+      };
+
+      function uniq(arr){
+        const s = new Set(arr.map(norm));
+        return [...s].filter(v => v !== "");
       }
-      if (!state.status){
-        const statuses = new Set(rows.map(r => norm(r.Status)));
-        if (statuses.has("Active")) state.status = "Active";
+      function sortYears(years){
+        return years.map(Number).filter(n => !Number.isNaN(n)).sort((a,b)=>b-a).map(String);
       }
-    }
-
-    function searching(){
-      return norm(state.query).trim().length > 0;
-    }
-
-    function syncUIForMode(){
-      const isSearching = searching();
-
-      yearSel.disabled = isSearching;
-      statusSel.disabled = isSearching;
-      lawyerSel.disabled = isSearching;
-      typeSel.disabled = isSearching;
-
-      if (isSearching){
-        searchHL.textContent = state.query;
-        searchTag.style.display = "inline-flex";
-        q.title = "Search by MatterID, Client, or Subject. Filters are ignored while searching. Press Esc to clear.";
-      } else {
-        searchTag.style.display = "none";
-        q.placeholder = "Search by MatterID, Client, or Subject";
-        q.title = "Search by MatterID, Client, or Subject. Press Enter to search. Filters are ignored while searching. Press Esc to clear.";
+      function sortAlpha(items){
+        return items.sort((a,b)=>a.localeCompare(b, undefined, { sensitivity:"base" }));
       }
-    }
 
-    // OR behavior:
-    // - Search committed (Enter) => SEARCH ONLY (ignores dropdowns)
-    // - No committed search => FILTER ONLY (AND across dropdowns)
-    function computeIds(){
-      const qtext = norm(state.query).trim().toLowerCase();
+      function fillSelect(sel, items, selected, allLabel){
+        sel.innerHTML = "";
+        const all = document.createElement("option");
+        all.value = "";
+        all.textContent = allLabel;
+        sel.appendChild(all);
 
-      if (qtext){
+        items.forEach(v => {
+          const o = document.createElement("option");
+          o.value = v;
+          o.textContent = v;
+          sel.appendChild(o);
+        });
+
+        sel.value = selected || "";
+      }
+
+      function applyDefaultsIfEmpty(){
+        if (!state.year){
+          const currentYear = String(new Date().getFullYear());
+          const years = new Set(rows.map(r => norm(r.MTR_YEAR)));
+          if (years.has(currentYear)) state.year = currentYear;
+        }
+        if (!state.status){
+          const statuses = new Set(rows.map(r => norm(r.Status)));
+          if (statuses.has("Active")) state.status = "Active";
+        }
+      }
+
+      function searching(){
+        return norm(state.query).trim().length > 0;
+      }
+
+      function syncUIForMode(){
+        const isSearching = searching();
+
+        yearSel.disabled = isSearching;
+        statusSel.disabled = isSearching;
+        lawyerSel.disabled = isSearching;
+        typeSel.disabled = isSearching;
+
+        if (isSearching){
+          searchHL.textContent = state.query;
+          searchTag.style.display = "inline-flex";
+          q.title = "Search by MatterID, Client, or Subject. Filters are ignored while searching. Press Esc to clear.";
+        } else {
+          searchTag.style.display = "none";
+          q.placeholder = "Search by MatterID, Client, or Subject";
+          q.title = "Search by MatterID, Client, or Subject. Press Enter to search. Filters are ignored while searching. Press Esc to clear.";
+        }
+      }
+
+      // OR behavior:
+      // - Search committed (Enter) => SEARCH ONLY (ignores dropdowns)
+      // - No committed search => FILTER ONLY (AND across dropdowns)
+      function computeIds(){
+        const qtext = norm(state.query).trim().toLowerCase();
+
+        if (qtext){
+          const ids = [];
+          for (let i=0; i<rows.length; i++){
+            if (rows[i]._search.indexOf(qtext) !== -1) ids.push(rows[i].id);
+          }
+          return ids;
+        }
+
+        const y = norm(state.year);
+        const s = norm(state.status);
+        const l = norm(state.lawyer);
+        const t = norm(state.type);
+
         const ids = [];
         for (let i=0; i<rows.length; i++){
-          if (rows[i]._search.indexOf(qtext) !== -1) ids.push(rows[i].id);
+          const r = rows[i];
+          if (y && norm(r.MTR_YEAR) !== y) continue;
+          if (s && norm(r.Status) !== s) continue;
+          if (l && norm(r.Lawyer) !== l) continue;
+          if (t && norm(r.Mtr_Type) !== t) continue;
+          ids.push(r.id);
         }
         return ids;
       }
 
-      const y = norm(state.year);
-      const s = norm(state.status);
-      const l = norm(state.lawyer);
-      const t = norm(state.type);
-
-      const ids = [];
-      for (let i=0; i<rows.length; i++){
-        const r = rows[i];
-        if (y && norm(r.MTR_YEAR) !== y) continue;
-        if (s && norm(r.Status) !== s) continue;
-        if (l && norm(r.Lawyer) !== l) continue;
-        if (t && norm(r.Mtr_Type) !== t) continue;
-        ids.push(r.id);
+      function applySelection(){
+        const ids = computeIds();
+        countEl.textContent = `${ids.length} matches`;
+        grist.setSelectedRows(ids.length ? ids : null);
       }
-      return ids;
-    }
 
-    function applySelection(){
-      const ids = computeIds();
-      countEl.textContent = `${ids.length} matches`;
-      grist.setSelectedRows(ids.length ? ids : null);
-    }
+      function renderOptions(){
+        const years = sortYears(uniq(rows.map(r => r.MTR_YEAR)));
+        const statuses = sortAlpha(uniq(rows.map(r => r.Status)));
+        const lawyers = sortAlpha(uniq(rows.map(r => r.Lawyer)));
+        const types = sortAlpha(uniq(rows.map(r => r.Mtr_Type)));
 
-    function renderOptions(){
-      const years = sortYears(uniq(rows.map(r => r.MTR_YEAR)));
-      const statuses = sortAlpha(uniq(rows.map(r => r.Status)));
-      const lawyers = sortAlpha(uniq(rows.map(r => r.Lawyer)));
-      const types = sortAlpha(uniq(rows.map(r => r.Mtr_Type)));
+        fillSelect(yearSel, years, state.year, "All years");
+        fillSelect(statusSel, statuses, state.status, "All statuses");
+        fillSelect(lawyerSel, lawyers, state.lawyer, "All lawyers");
+        fillSelect(typeSel, types, state.type, "All types");
+      }
 
-      fillSelect(yearSel, years, state.year, "All years");
-      fillSelect(statusSel, statuses, state.status, "All statuses");
-      fillSelect(lawyerSel, lawyers, state.lawyer, "All lawyers");
-      fillSelect(typeSel, types, state.type, "All types");
-    }
+      function updateClearX(){
+        const hasText = norm(state.queryDraft).length > 0;
+        clearX.style.display = hasText ? "inline-flex" : "none";
+      }
 
-    // Search: type does NOT search; Enter commits the query
-    function updateClearX(){
-      const hasText = norm(state.queryDraft).length > 0;
-      clearX.style.display = hasText ? "inline-flex" : "none";
-    }
-
-    function clearSearch(){
-      state.queryDraft = "";
-      state.query = "";
-      q.value = "";
-      updateClearX();
-      syncUIForMode();
-      applySelection();
-    }
-
-    q.addEventListener("input", () => {
-      state.queryDraft = q.value;
-      updateClearX();
-    });
-
-    q.addEventListener("keydown", (ev) => {
-      if (ev.key === "Enter"){
-        ev.preventDefault();
-        state.query = norm(state.queryDraft).trim();
+      function clearSearch(){
+        state.queryDraft = "";
+        state.query = "";
+        q.value = "";
+        updateClearX();
         syncUIForMode();
         applySelection();
-      } else if (ev.key === "Escape"){
-        ev.preventDefault();
-        clearSearch();
       }
-    });
 
-    clearX.addEventListener("click", () => {
-      clearSearch();
-      q.focus();
-    });
+      q.addEventListener("input", () => {
+        state.queryDraft = q.value;
+        updateClearX();
+      });
 
-    // Filters
-    yearSel.addEventListener("change", () => { state.year = yearSel.value; applySelection(); });
-    statusSel.addEventListener("change", () => { state.status = statusSel.value; applySelection(); });
-    lawyerSel.addEventListener("change", () => { state.lawyer = lawyerSel.value; applySelection(); });
-    typeSel.addEventListener("change", () => { state.type = typeSel.value; applySelection(); });
-
-    clearBtn.addEventListener("click", () => {
-      state.queryDraft = "";
-      state.query = "";
-      q.value = "";
-      updateClearX();
-
-      state.year = "";
-      state.status = "";
-      state.lawyer = "";
-      state.type = "";
-
-      applyDefaultsIfEmpty();
-      renderOptions();
-      syncUIForMode();
-      applySelection();
-    });
-
-    // Load data once (selected table must be Matters)
-    setErr("");
-    grist.fetchSelectedTable({ format:"rows" })
-      .then(data => {
-        const all = data || [];
-        if (!all.length){
-          setErr("No rows returned. Check Select Data = Matters and access level.");
-          return;
+      q.addEventListener("keydown", (ev) => {
+        if (ev.key === "Enter"){
+          ev.preventDefault();
+          state.query = norm(state.queryDraft).trim();
+          syncUIForMode();
+          applySelection();
+        } else if (ev.key === "Escape"){
+          ev.preventDefault();
+          clearSearch();
         }
+      });
 
-        const first = all[0] || {};
-        const required = ["MatterID","Clients","Subject","Subject2","Lawyer","Mtr_Type","MTR_YEAR","Status"];
-        const missing = required.filter(k => !(k in first));
-        if (missing.length){
-          setErr("Missing column(s): " + missing.join(", "));
-          return;
-        }
+      clearX.addEventListener("click", () => {
+        clearSearch();
+        q.focus();
+      });
 
-        rows = all.map(r => {
-          const searchBlob = (
-            norm(r.MatterID) + " " +
-            norm(r.Clients) + " " +
-            norm(r.Subject) + " " +
-            norm(r.Subject2)
-          ).toLowerCase();
+      yearSel.addEventListener("change", () => { state.year = yearSel.value; applySelection(); });
+      statusSel.addEventListener("change", () => { state.status = statusSel.value; applySelection(); });
+      lawyerSel.addEventListener("change", () => { state.lawyer = lawyerSel.value; applySelection(); });
+      typeSel.addEventListener("change", () => { state.type = typeSel.value; applySelection(); });
 
-          return {
-            id: r.id,
-            MTR_YEAR: r.MTR_YEAR,
-            Status: r.Status,
-            Lawyer: r.Lawyer,
-            Mtr_Type: r.Mtr_Type,
-            _search: searchBlob
-          };
-        });
+      clearBtn.addEventListener("click", () => {
+        state.queryDraft = "";
+        state.query = "";
+        q.value = "";
+        updateClearX();
+
+        state.year = "";
+        state.status = "";
+        state.lawyer = "";
+        state.type = "";
 
         applyDefaultsIfEmpty();
         renderOptions();
         syncUIForMode();
         applySelection();
-      })
-      .catch(e => {
-        setErr("fetchSelectedTable failed: " + (e && e.message ? e.message : e));
       });
+
+      // Load data once
+      setErr("");
+      grist.fetchSelectedTable({ format:"rows" })
+        .then(data => {
+          const all = data || [];
+          if (!all.length){
+            setErr("No rows returned. Check Select Data = Matters and access level.");
+            return;
+          }
+
+          const first = all[0] || {};
+          const required = ["MatterID","Clients","Subject","Subject2","Lawyer","Mtr_Type","MTR_YEAR","Status"];
+          const missing = required.filter(k => !(k in first));
+          if (missing.length){
+            setErr("Missing column(s): " + missing.join(", "));
+            return;
+          }
+
+          rows = all.map(r => {
+            const searchBlob = (
+              norm(r.MatterID) + " " +
+              norm(r.Clients) + " " +
+              norm(r.Subject) + " " +
+              norm(r.Subject2)
+            ).toLowerCase();
+
+            return {
+              id: r.id,
+              MTR_YEAR: r.MTR_YEAR,
+              Status: r.Status,
+              Lawyer: r.Lawyer,
+              Mtr_Type: r.Mtr_Type,
+              _search: searchBlob
+            };
+          });
+
+          applyDefaultsIfEmpty();
+          renderOptions();
+          syncUIForMode();
+          applySelection();
+        })
+        .catch(e => {
+          setErr("fetchSelectedTable failed: " + (e && e.message ? e.message : e));
+        });
+    }
   </script>
 </body>
 </html>
